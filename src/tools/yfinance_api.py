@@ -445,8 +445,12 @@ def get_company_news(
 
         articles = []
         for item in news_items:
+            # yfinance v2 format: {id, content: {title, pubDate, ...}}
+            content = item.get("content", item)  # fallback to item itself for old format
+
             # Parse publish time
-            pub_ts = item.get("providerPublishTime") or item.get("publish_time")
+            pub_ts = (content.get("pubDate") or content.get("providerPublishTime")
+                      or content.get("publish_time"))
             if pub_ts:
                 if isinstance(pub_ts, (int, float)):
                     dt = datetime.datetime.fromtimestamp(pub_ts)
@@ -463,17 +467,23 @@ def get_company_news(
             if start_date and date_only < start_date:
                 continue
 
-            title = item.get("title", "")
+            title = content.get("title", "")
             if not title:
                 continue
+
+            # Extract provider
+            provider = content.get("provider", {})
+            source = (provider.get("displayName") if isinstance(provider, dict)
+                      else content.get("publisher", "Yahoo Finance"))
 
             articles.append(CompanyNews(
                 ticker=ticker,
                 title=title,
-                author=item.get("publisher") or item.get("author"),
-                source=item.get("publisher", "Yahoo Finance"),
+                author=content.get("author"),
+                source=source or "Yahoo Finance",
                 date=date_str,
-                url=item.get("link", ""),
+                url=content.get("canonicalUrl", {}).get("url", "") if isinstance(content.get("canonicalUrl"), dict)
+                     else content.get("link", ""),
                 sentiment=None,
             ))
 
